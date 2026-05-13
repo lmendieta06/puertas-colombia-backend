@@ -60,9 +60,73 @@ app.use((err, _req, res, _next) => {
 });
 
 // ============ ARRANQUE ============
-app.listen(PORT, () => {
-  console.log(`\n🚪 Puertas Colombia API`);
-  console.log(`   Servidor: http://localhost:${PORT}`);
-  console.log(`   CORS permitido: ${allowedOrigins.join(", ")}`);
-  console.log(`   Entorno: ${process.env.NODE_ENV || "development"}\n`);
-});
+import { query } from "./config/db.js";
+
+async function ensureTables() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS ventas (
+      id SERIAL PRIMARY KEY,
+      numero_factura TEXT UNIQUE NOT NULL,
+      fecha_emision DATE NOT NULL,
+      fecha_vencimiento DATE NOT NULL,
+      cliente_nombre TEXT NOT NULL,
+      cliente_documento TEXT,
+      cliente_email TEXT NOT NULL,
+      cliente_telefono TEXT,
+      cliente_ciudad TEXT,
+      cliente_direccion TEXT,
+      cliente_notas TEXT,
+      metodo_pago TEXT NOT NULL,
+      subtotal NUMERIC(12, 2) NOT NULL,
+      iva NUMERIC(12, 2) NOT NULL,
+      descuento NUMERIC(12, 2) DEFAULT 0,
+      retencion NUMERIC(12, 2) NOT NULL,
+      envio NUMERIC(12, 2) DEFAULT 0,
+      total NUMERIC(12, 2) NOT NULL,
+      creado_en TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS venta_items (
+      id SERIAL PRIMARY KEY,
+      venta_id INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+      producto_id TEXT NOT NULL,
+      descripcion TEXT NOT NULL,
+      cantidad INTEGER NOT NULL,
+      precio_unitario NUMERIC(12, 2) NOT NULL,
+      total_linea NUMERIC(12, 2) NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS contactos (
+      id SERIAL PRIMARY KEY,
+      nombre TEXT NOT NULL,
+      email TEXT NOT NULL,
+      telefono TEXT,
+      ciudad TEXT,
+      asunto TEXT,
+      mensaje TEXT NOT NULL,
+      creado_en TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS comentarios (
+      id SERIAL PRIMARY KEY,
+      nombre TEXT NOT NULL,
+      ciudad TEXT,
+      calificacion INTEGER NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
+      mensaje TEXT NOT NULL,
+      aprobado BOOLEAN DEFAULT TRUE,
+      creado_en TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  console.log("[db] Tablas verificadas/creadas");
+}
+
+ensureTables()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`\n🚪 Puertas Colombia API`);
+      console.log(`   Escuchando en puerto: ${PORT}`);
+      console.log(`   CORS permitido: ${allowedOrigins.join(", ")}`);
+      console.log(`   Entorno: ${process.env.NODE_ENV || "development"}\n`);
+    });
+  })
+  .catch((err) => {
+    console.error("[server] ✗ No se pudo inicializar la DB:", err);
+    process.exit(1);
+  });
