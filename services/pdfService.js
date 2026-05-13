@@ -1,32 +1,26 @@
 import puppeteerCore from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
-
-/**
- * Genera un PDF a partir de HTML usando Chromium headless.
- *
- * - En producción (Linux/Railway): usa @sparticuz/chromium (binario optimizado).
- * - En local (Mac/Windows): usa el puppeteer normal que descarga su propio Chromium.
- *
- * Reutiliza el browser entre peticiones para evitar el cold start.
- */
 
 let browserPromise = null;
 
 async function launchBrowser() {
-  // En producción, Railway expone NODE_ENV=production y estamos en Linux.
-  // En local (Mac/Windows) usamos puppeteer completo.
   const isProduction = process.env.NODE_ENV === "production";
 
   if (isProduction) {
+    // En Railway: usar el Chromium instalado por apt en el Dockerfile
     return puppeteerCore.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium",
       headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--single-process",
+      ],
     });
   }
 
-  // Desarrollo local: importar puppeteer dinámicamente para que no falle
-  // si no está instalado en producción.
+  // Local: usar puppeteer completo
   const { default: puppeteer } = await import("puppeteer");
   return puppeteer.launch({ headless: true });
 }
