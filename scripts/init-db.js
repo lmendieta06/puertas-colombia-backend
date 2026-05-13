@@ -1,6 +1,11 @@
 import "dotenv/config";
 import { query } from "../config/db.js";
 
+console.log("[debug] DATABASE_URL existe:", !!process.env.DATABASE_URL);
+console.log("[debug] DATABASE_URL primeros 40 chars:", (process.env.DATABASE_URL || "VACÍO").slice(0, 40));
+console.log("[debug] DATABASE_SSL:", process.env.DATABASE_SSL);
+console.log("[debug] NODE_ENV:", process.env.NODE_ENV);
+
 const sql = `
   CREATE TABLE IF NOT EXISTS ventas (
     id SERIAL PRIMARY KEY,
