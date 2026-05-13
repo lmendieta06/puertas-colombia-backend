@@ -69,10 +69,13 @@ async function main() {
     await query(sql);
     console.log("[init-db] ✓ Tablas creadas correctamente");
     process.exit(0);
-  } catch (error) {
-    console.error("[init-db] ✗ Error:", error.message);
+    } catch (error) {
+    console.error("[init-db] ✗ Error completo:", error);
+    console.error("[init-db] code:", error?.code);
+    console.error("[init-db] message:", error?.message);
+    console.error("[init-db] hint:", error?.hint);
     process.exit(1);
-  }
+    }
 }
 
 main();
