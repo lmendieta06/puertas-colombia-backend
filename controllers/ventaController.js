@@ -1,6 +1,6 @@
 import * as VentaModel from "../models/Venta.js";
-import transporter from "../config/mailer.js";
 import { plantillaFactura } from "../views/factura.template.js";
+import { htmlToPdf } from "../services/pdfService.js";
 
 function getDatosEmpresa() {
   return {
@@ -16,13 +16,8 @@ function getDatosEmpresa() {
 
 /**
  * POST /api/ventas
- * Body esperado desde el frontend:
- * {
- *   cliente: { nombre, documento?, email, telefono, ciudad, direccion, notas? },
- *   items: [{ producto_id, descripcion, cantidad, precio_unitario }],
- *   metodo_pago: "pse" | "card" | "nequi" | ...,
- *   envio: number (opcional, por defecto 0)
- * }
+ * Crea la venta y la guarda en la DB. NO envía correo.
+ * El cliente descargará la factura desde el frontend.
  */
 export async function crearVenta(req, res) {
   try {
@@ -72,7 +67,6 @@ export async function crearVenta(req, res) {
     const retencion = Math.round(subtotal * retPct);
     const total = subtotal + iva - descuento - retencion + Number(envio);
 
-    // ============ NÚMERO DE FACTURA Y FECHAS ============
     const numeroFactura = await VentaModel.generarNumeroFactura();
     const hoy = new Date();
     const vencimiento = new Date(hoy);
@@ -82,7 +76,6 @@ export async function crearVenta(req, res) {
       numero_factura: numeroFactura,
       fecha_emision: hoy.toISOString().slice(0, 10),
       fecha_vencimiento: vencimiento.toISOString().slice(0, 10),
-
       cliente_nombre: cliente.nombre,
       cliente_documento: cliente.documento || null,
       cliente_email: cliente.email,
@@ -90,7 +83,6 @@ export async function crearVenta(req, res) {
       cliente_ciudad: cliente.ciudad || null,
       cliente_direccion: cliente.direccion || null,
       cliente_notas: cliente.notas || null,
-
       metodo_pago,
       subtotal,
       iva,
@@ -100,28 +92,7 @@ export async function crearVenta(req, res) {
       total,
     };
 
-    // ============ GUARDAR EN DB ============
     const venta = await VentaModel.crearVenta(ventaData, itemsConTotal);
-
-    // ============ ENVIAR CORREO CON FACTURA ============
-    const empresa = getDatosEmpresa();
-    const html = plantillaFactura(venta, empresa);
-
-    // Envío en background: no bloquea la respuesta si Gmail tarda
-    transporter
-      .sendMail({
-        from: `"${empresa.nombre}" <${process.env.MAIL_USER}>`,
-        to: venta.cliente_email,
-        bcc: process.env.MAIL_TIENDA,
-        subject: `Factura ${venta.numero_factura} — Puertas Colombia`,
-        html,
-      })
-      .then(() => {
-        console.log(`[ventas] Factura ${venta.numero_factura} enviada a ${venta.cliente_email}`);
-      })
-      .catch((err) => {
-        console.error(`[ventas] Error enviando factura ${venta.numero_factura}:`, err.message);
-      });
 
     return res.status(201).json({
       ok: true,
@@ -137,6 +108,44 @@ export async function crearVenta(req, res) {
     return res
       .status(500)
       .json({ error: "Error al procesar la venta", detalle: error.message });
+  }
+}
+
+/**
+ * GET /api/ventas/:numeroFactura/pdf
+ * Genera y descarga el PDF de la factura.
+ * Acepta el número de factura (FV-2026-NNNN) o el id numérico.
+ */
+export async function descargarFacturaPDF(req, res) {
+  try {
+    const { numeroFactura } = req.params;
+
+    const venta = /^\d+$/.test(numeroFactura)
+      ? await VentaModel.obtenerVentaPorId(Number(numeroFactura))
+      : await VentaModel.obtenerVentaPorNumero(numeroFactura);
+
+    if (!venta) {
+      return res.status(404).json({ error: "Factura no encontrada" });
+    }
+
+    const empresa = getDatosEmpresa();
+    const html = plantillaFactura(venta, empresa);
+
+    const pdfBuffer = await htmlToPdf(html);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${venta.numero_factura}.pdf"`,
+    );
+    res.setHeader("Content-Length", pdfBuffer.length);
+
+    return res.end(pdfBuffer);
+  } catch (error) {
+    console.error("[ventas] Error generando PDF:", error);
+    return res
+      .status(500)
+      .json({ error: "Error generando PDF", detalle: error.message });
   }
 }
 

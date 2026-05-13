@@ -1,9 +1,5 @@
 import { query, getClient } from "../config/db.js";
 
-/**
- * Genera el siguiente número de factura con formato FV-AAAA-NNNN.
- * El correlativo se reinicia cada año.
- */
 export async function generarNumeroFactura() {
   const anio = new Date().getFullYear();
   const prefijo = `FV-${anio}-`;
@@ -17,9 +13,6 @@ export async function generarNumeroFactura() {
   return `${prefijo}${correlativo}`;
 }
 
-/**
- * Crea una venta y sus items dentro de una transacción.
- */
 export async function crearVenta(venta, items) {
   const client = await getClient();
   try {
@@ -105,6 +98,24 @@ export async function obtenerVentaPorId(id) {
   const { rows: itemsRows } = await query(
     "SELECT * FROM venta_items WHERE venta_id = $1 ORDER BY id",
     [id],
+  );
+
+  return { ...ventaRows[0], items: itemsRows };
+}
+
+/**
+ * Busca una venta por su número de factura (ej. "FV-2026-0001").
+ */
+export async function obtenerVentaPorNumero(numeroFactura) {
+  const { rows: ventaRows } = await query(
+    "SELECT * FROM ventas WHERE numero_factura = $1",
+    [numeroFactura],
+  );
+  if (ventaRows.length === 0) return null;
+
+  const { rows: itemsRows } = await query(
+    "SELECT * FROM venta_items WHERE venta_id = $1 ORDER BY id",
+    [ventaRows[0].id],
   );
 
   return { ...ventaRows[0], items: itemsRows };

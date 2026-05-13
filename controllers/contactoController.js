@@ -1,10 +1,8 @@
 import * as ContactoModel from "../models/Contacto.js";
-import transporter from "../config/mailer.js";
-import { plantillaContacto } from "../views/notificaciones.template.js";
 
 /**
  * POST /api/contacto
- * Body: { nombre, email, telefono?, ciudad?, asunto?, mensaje }
+ * Guarda el mensaje en la DB. Para verlo, consulta Supabase.
  */
 export async function crearContacto(req, res) {
   try {
@@ -16,7 +14,6 @@ export async function crearContacto(req, res) {
         .json({ error: "Faltan campos requeridos (nombre, email, mensaje)" });
     }
 
-    // Validación simple de email
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Correo electrónico inválido" });
     }
@@ -29,20 +26,6 @@ export async function crearContacto(req, res) {
       asunto,
       mensaje,
     });
-
-    // Enviar notificación a la tienda en background
-    transporter
-      .sendMail({
-        from: `"Puertas Colombia · Contacto" <${process.env.MAIL_USER}>`,
-        to: process.env.MAIL_TIENDA,
-        replyTo: email,
-        subject: `Nuevo contacto: ${asunto || nombre}`,
-        html: plantillaContacto(contacto),
-      })
-      .then(() => console.log(`[contacto] Notificación enviada (${email})`))
-      .catch((err) =>
-        console.error("[contacto] Error enviando notificación:", err.message),
-      );
 
     return res.status(201).json({ ok: true, contacto: { id: contacto.id } });
   } catch (error) {

@@ -1,205 +1,138 @@
-# Puertas Colombia — Backend
+# Feature: Descargar factura en PDF
 
-Backend MVC en Node.js + Express + PostgreSQL para:
+Reemplaza el envío por correo con un botón de descarga en la pantalla de
+confirmación del pedido. Sin Nodemailer, sin Gmail API, sin SMTP.
 
-- Registrar **ventas** y enviar la factura por correo (HTML, estilo igual al modelo)
-- Guardar mensajes del formulario **Contáctanos** y reenviarlos al correo de la tienda
-- Guardar **comentarios del blog** en la base de datos y notificarlos por correo
+## Archivos modificados
 
-## Estructura
+### Backend (carpeta backend/)
 
-```
-backend/
-├── config/
-│   ├── db.js              # Pool de PostgreSQL
-│   └── mailer.js          # Nodemailer + Gmail
-├── controllers/
-│   ├── ventaController.js
-│   ├── contactoController.js
-│   └── comentarioController.js
-├── models/
-│   ├── Venta.js
-│   ├── Contacto.js
-│   └── Comentario.js
-├── routes/
-│   ├── ventaRoutes.js
-│   ├── contactoRoutes.js
-│   └── comentarioRoutes.js
-├── views/                 # Plantillas HTML para correos
-│   ├── factura.template.js
-│   └── notificaciones.template.js
-├── scripts/
-│   └── init-db.js         # Crea las tablas
-├── server.js              # Punto de entrada
-├── package.json
-├── Dockerfile
-├── railway.json
-└── .env.example
-```
+| Archivo destino | Archivo de origen |
+|---|---|
+| `package.json` | `backend/package.json` |
+| `services/pdfService.js` (NUEVO) | `backend/pdfService.js` |
+| `models/Venta.js` | `backend/Venta.js` |
+| `controllers/ventaController.js` | `backend/ventaController.js` |
+| `controllers/contactoController.js` | `backend/contactoController.js` |
+| `controllers/comentarioController.js` | `backend/comentarioController.js` |
+| `routes/ventaRoutes.js` | `backend/ventaRoutes.js` |
 
-## Endpoints
+### Frontend
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `POST` | `/api/ventas` | Crea venta, calcula impuestos, guarda y envía factura por correo |
-| `GET`  | `/api/ventas` | Lista las últimas 100 ventas (admin) |
-| `GET`  | `/api/ventas/:id` | Detalle con items |
-| `POST` | `/api/contacto` | Guarda mensaje y notifica a la tienda |
-| `GET`  | `/api/contacto` | Lista mensajes recibidos (admin) |
-| `GET`  | `/api/comentarios` | Lista comentarios aprobados |
-| `POST` | `/api/comentarios` | Crea comentario y notifica por correo |
+| Archivo destino | Archivo de origen |
+|---|---|
+| `src/services/ventaService.ts` | `frontend/ventaService.ts` |
+| `src/routes/checkout.tsx` | `frontend/checkout.tsx` |
 
----
+## Pasos de integración
 
-## Local
-
-### 1. Requisitos
-
-- Node 20+
-- Un Postgres corriendo. La forma más fácil con Docker:
-
-```bash
-docker run -d --name puertas-pg \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=puertas_colombia \
-  -p 5432:5432 \
-  postgres:16
-```
-
-### 2. Configuración
+### 1. Backend local
 
 ```bash
 cd backend
-cp .env.example .env
-# Edita .env con tu MAIL_PASS de Gmail (App Password)
-npm install
+
+# 1. Reemplazar archivos según la tabla de arriba
+
+# 2. (Opcional) borrar archivos ya no usados
+rm config/mailer.js
+rm views/notificaciones.template.js
+
+# 3. Instalar nuevas dependencias y quitar nodemailer
+npm uninstall nodemailer
+npm install puppeteer-core @sparticuz/chromium
+
+# 4. Probar localmente
+npm run dev
 ```
 
-### 3. Crear tablas y arrancar
+### 2. Probar el endpoint del PDF
+
+Con el server corriendo y al menos una venta en la base de datos:
 
 ```bash
-npm run db:init   # Crea las tablas
-npm run dev       # Arranca con --watch (recarga automática)
+curl http://localhost:3001/api/ventas/FV-2026-0001/pdf --output factura.pdf
 ```
 
-Abre <http://localhost:3001/> para ver el healthcheck.
+Si se descarga un PDF válido y se ve igual al diseño de la imagen modelo, ya está.
 
-### 4. Probar con curl
+### 3. Frontend local
 
 ```bash
-# Crear venta de prueba
-curl -X POST http://localhost:3001/api/ventas \
-  -H "Content-Type: application/json" \
-  -d '{
-    "cliente": {
-      "nombre": "Valentina Sanabria",
-      "documento": "901.234.567-1",
-      "email": "tu-correo@ejemplo.com",
-      "telefono": "(+57) 4 789 0123",
-      "ciudad": "Bogotá",
-      "direccion": "Carrera 50 # 25-10"
-    },
-    "items": [
-      { "producto_id": "mompox-102", "descripcion": "Mompox", "cantidad": 1, "precio_unitario": 890000 }
-    ],
-    "metodo_pago": "transfer"
-  }'
+# Reemplaza:
+#   src/services/ventaService.ts
+#   src/routes/checkout.tsx
+
+npm run dev
 ```
 
----
+Hace una compra de prueba: en la pantalla de confirmación aparece el botón
+"Descargar factura". Al darle clic descarga el PDF.
 
-## Gmail: App Password
+### 4. Subir a producción
 
-1. Activa verificación en 2 pasos: <https://myaccount.google.com/security>
-2. Crea una App Password: <https://myaccount.google.com/apppasswords>
-3. Pega los 16 caracteres en `MAIL_PASS` (sin espacios)
+```bash
+# Backend
+cd backend
+git add .
+git commit -m "feat: descargar factura PDF en lugar de enviar por correo"
+git push
 
-> ⚠️ **NUNCA** uses la contraseña normal de Gmail. Google la rechaza desde 2022.
-
----
-
-## Deploy a Railway
-
-### Paso 1 — Crear el proyecto
-
-1. Entra a [railway.com](https://railway.com) → **New Project** → **Deploy from GitHub repo**
-2. Selecciona el repositorio que contiene esta carpeta `backend/`
-3. Railway detecta automáticamente Node (vía Nixpacks) y `railway.json`
-
-### Paso 2 — Añadir PostgreSQL
-
-1. En tu proyecto Railway → **+ New** → **Database** → **Add PostgreSQL**
-2. Railway crea automáticamente la variable `DATABASE_URL` y la inyecta en tu servicio.
-
-### Paso 3 — Variables de entorno
-
-En la pestaña **Variables** del servicio, agrega (deja `DATABASE_URL` como está, Railway la maneja):
-
-```
-DATABASE_SSL=true
-FRONTEND_URL=https://tudominio.com
-MAIL_USER=puertascolombianas@gmail.com
-MAIL_PASS=tu_app_password_de_16_caracteres
-MAIL_TIENDA=puertascolombianas@gmail.com
-EMPRESA_NOMBRE=PUERTAS COLOMBIANAS
-EMPRESA_NIT=900.123.456-7
-EMPRESA_DIRECCION=Parque de la 93, Bogotá D.C., Colombia
-EMPRESA_TELEFONO=(+57) 321 613 6824
-EMPRESA_EMAIL=puertascolombianas@gmail.com
-EMPRESA_REGIMEN=Régimen Común | Responsable de IVA
-EMPRESA_RESOLUCION_DIAN=18764030960282
-IVA_PORCENTAJE=19
-RETENCION_PORCENTAJE=3.5
-NODE_ENV=production
+# Frontend
+cd ../frontend
+git add .
+git commit -m "feat: botón descargar factura PDF"
+git push
 ```
 
-### Paso 4 — Deploy
+Railway y Vercel re-despliegan solos.
 
-Railway lo despliega solo en cada push. El comando `node scripts/init-db.js && node server.js` (configurado en `railway.json`) crea las tablas la primera vez y arranca el servidor.
+### 5. Variables de entorno en Railway
 
-### Paso 5 — Dominio público
+**Puedes BORRAR estas variables (ya no se usan):**
 
-En el servicio → **Settings** → **Networking** → **Generate Domain**. Tendrás algo como `https://puertas-colombia-backend.up.railway.app`.
+- `MAIL_USER`
+- `MAIL_PASS`
+- `MAIL_TIENDA`
 
-Usa esa URL en el frontend (variable `VITE_API_URL`).
+**Mantén las demás** (DATABASE_URL, EMPRESA_*, etc.)
 
----
+## Cómo ver los mensajes de contacto y comentarios
 
-## Conectar el frontend
+Como ya no llegan por correo, los puedes revisar directamente en Supabase:
 
-En tu proyecto de React (TanStack), crea `src/lib/api.ts`:
+1. Entra a tu proyecto Supabase
+2. **SQL Editor** → **New Query**
+3. Pega:
 
-```ts
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+```sql
+-- Mensajes de contacto más recientes
+SELECT nombre, email, telefono, ciudad, asunto, mensaje, creado_en
+FROM contactos
+ORDER BY creado_en DESC
+LIMIT 50;
 
-export async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.error || `Error ${res.status}`);
-  }
-  return res.json();
-}
+-- Comentarios del blog más recientes
+SELECT nombre, ciudad, calificacion, mensaje, creado_en
+FROM comentarios
+ORDER BY creado_en DESC
+LIMIT 50;
 
-export async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`);
-  if (!res.ok) throw new Error(`Error ${res.status}`);
-  return res.json();
-}
+-- Ventas más recientes
+SELECT numero_factura, cliente_nombre, cliente_email, total, creado_en
+FROM ventas
+ORDER BY creado_en DESC
+LIMIT 50;
 ```
 
-Variable en `.env.local` del frontend:
+4. Run
 
-```
-VITE_API_URL=http://localhost:3001
-```
+También puedes ir a **Table Editor** y ver cada tabla con filtros visuales.
 
-Y en producción:
+## Consideraciones de Puppeteer en Railway
 
-```
-VITE_API_URL=https://puertas-colombia-backend.up.railway.app
-```
+La primera vez que un usuario descargue un PDF, Chromium se inicia y tarda
+~3-5 segundos. Las siguientes descargas son instantáneas porque el browser
+queda cacheado en memoria.
+
+Si Railway reinicia el contenedor (deploy nuevo, sin tráfico por mucho tiempo),
+la primera descarga vuelve a ser lenta. Es normal.
