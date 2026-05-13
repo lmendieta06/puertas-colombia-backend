@@ -1,0 +1,22 @@
+{
+  "name": "puertas-colombia-backend",
+  "version": "1.0.0",
+  "description": "Backend MVC para Puertas Colombia: ventas, facturas por correo, contacto y comentarios del blog",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "db:init": "node scripts/init-db.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "nodemailer": "^6.9.15",
+    "pg": "^8.13.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
